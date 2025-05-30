@@ -5,21 +5,40 @@ import csv
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-checkpoint = "./checkpoints/sam2.1_hiera_large.pt"
-model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+import argparse
+import os
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Generate masks using SAM2 from CSV coordinates')
+parser.add_argument('--csv_file', required=True, help='Path to CSV file with coordinates')
+parser.add_argument('--image_folder', required=True, help='Path to folder containing images')
+parser.add_argument('--output_dir', required=True, help='Path to output directory for masks')
+parser.add_argument('--checkpoint', default='./checkpoints/sam2.1_hiera_large.pt', help='Path to SAM2 checkpoint')
+parser.add_argument('--model_cfg', default='configs/sam2.1/sam2.1_hiera_l.yaml', help='Path to SAM2 model config')
+
+args = parser.parse_args()
+
+# Create output directory if it doesn't exist
+os.makedirs(args.output_dir, exist_ok=True)
+
+checkpoint = args.checkpoint
+model_cfg = args.model_cfg
 predictor = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
-csv_file="/home/zlalena/data/ex2103-DIVE11-videos/example 1/locations.csv"
+csv_file = args.csv_file
 reader = csv.reader(open(csv_file))
 mylines = list(reader)
 mylines = mylines[1:]
-image_folder = "/home/zlalena/data/ex2103-DIVE11-videos/example 1/images/"
+image_folder = args.image_folder
 
 with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
     for image_data in mylines:
         #print("Image data:", image_data)
-        image_name = image_folder + image_data[0] +".png"
+        image_name = os.path.join(image_folder, image_data[0] + ".png")
         #print("Image name:", image_name)
         image = cv2.imread(image_name)
+        if image is None:
+            print(f"Warning: Could not read image {image_name}")
+            continue
         #print("Read image successfully:", image is not None)
         # cv2.imshow("image",image)
         # cv2.waitKey(0)
@@ -53,6 +72,8 @@ with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
                 combined_mask[mask.astype(bool)] = 1
 
         # save combined mask
-        cv2.imwrite(f"/home/zlalena/data/ex2103-DIVE11-videos/example 1/masks/combined_mask_{image_data[0]}.png", combined_mask*255)
+        output_path = os.path.join(args.output_dir, f"combined_mask_{image_data[0]}.png")
+        cv2.imwrite(output_path, combined_mask*255)
+        print(f"Saved mask: {output_path}")
         print("Prediction completed")
       
